@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
 #
-#	 NAME
-#	   backup-router
+#     NAME
+#       backup-router
 #
-#	 DESCRIPTION
-#	   This script is called by cron and
+#     DESCRIPTION
+#       This script is called by cron and
 #      will backup NVRAM, /jffs, and mounted USB devices
 #      to a remote server vis ssh
 #
@@ -23,8 +23,8 @@
 #      key auth is working; for example:
 #          ssh -p 22 -i /mnt/usb/merlin/.ssh/id_rsa merlin@example.com
 #
-#	 AUTHOR
-#	   Don Feliciano (don@effinthing.com)
+#     AUTHOR
+#       Don Feliciano (don@effinthing.com)
 #
 
 # Constants
