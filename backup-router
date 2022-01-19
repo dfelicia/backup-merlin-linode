@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+
+#
+#	 NAME
+#	   backup-router
+#
+#	 DESCRIPTION
+#	   This script is called by cron and
+#      will backup NVRAM, /jffs, and mounted USB devices
+#      to a remote server vis ssh
+#
+#    REQUIRES
+#      entware, bash and rsync
+#      nsru is optional for backing up nvram
+#
+#    PREREQS
+#      Public key authentication must be configured, and
+#      ~/.ssh must be stored on a mounted disk
+#      Change global variables as needed
+#
+#    PREFLIGHT
+#      Make sure your ssh config is correct by ensuring public
+#      key auth is working; for example:
+#          ssh -p 22 -i /mnt/usb/merlin/.ssh/id_rsa merlin@example.com
+#
+#	 AUTHOR
+#	   Don Feliciano (don@effinthing.com)
+#
+
+# Constants
+declare -r SCRIPT_NAME="$(basename ${BASH_SOURCE[0]})"
+
+# Globals
+declare -a mounted_disks=()
+
+# Change values as needed
+declare ssh_host="example.com"
+declare ssh_port="22"
+declare ssh_user="merlin"
+declare ssh_cfg_dir="/mnt/usb/merlin/.ssh"
+declare ssh_remote_dir="~/router-backup"
+
+#-------------------------------------------------------------------------------
+# Functions
+#
+log_msg() {
+    local syslog_msg="${1}"
+
+    logger -t ${SCRIPT_NAME} "${syslog_msg}"
+
+    return 0
+
+}
+
+find_mounts() {
+    local -n mnts=${1}
+
+    for mnt in $(mount | awk '/ext/ { print $3 }'); do
+        mnts+=("${mnt}")
+    done
+
+    return 0
+}
+
+enable_cron() {
+    if [[ -z $(cru l | grep ${SCRIPT_NAME}) ]]; then
+        # Add cron job every day at 3am
+        cru a ${SCRIPT_NAME} "* 3 * * * /jffs/scripts/backup-router"
+        log_msg "Added cron job"
+    fi
+
+    return 0
+}
+
+backup_nvram() {
+    local nvram_save
+    local disk
+
+    for disk in "${mounted_disks[@]}"; do
+        nvram_save=$(find ${disk} -maxdepth 5 -type f -name nvram-save.sh)
+        [[ -z ${nvram_save} ]] || break
+    done
+
+    if [[ -x ${nvram_save} ]]; then
+        log_msg "Executing ${nvram_save}"
+        ${nvram_save} >> /opt/var/log/backup-nvram.log 2>&1
+        return ${?}
+    else
+        log_msg "nvram-save.sh not found"
+        return 1
+    fi
+}
+
+backup_disks() {
+    local disk
+    local log
+
+    # dropbear's ssh doesn't accept -y so we have to make sure ${ssh_host} is known
+    grep -qs "${ssh_host}" ~/.ssh/known_hosts || \
+        cp ${ssh_cfg_dir}/known_hosts ~/.ssh/known_hosts
+
+    # Sync contents of mounted disks to ${ssh_host}
+    # ${ssh_cfg_dir}/id_rsa must exist and be trusted by ${ssh_host}
+    for disk in "${mounted_disks[@]}"; do
+        log=/opt/var/log/backup-$(basename ${disk}).log
+        log_msg "Backing up ${disk} to ${ssh_host}"
+
+        /usr/bin/ssh -p ${ssh_port} -i ${ssh_cfg_dir}/id_rsa ${ssh_user}@${ssh_host} \
+        "mkdir -p ${ssh_remote_dir}/$(basename ${disk})" >> ${log} 2>&1
+
+        /opt/bin/rsync -avz --exclude 'myswap.swp' \
+            -e "/usr/bin/ssh -p ${ssh_port} -i ${ssh_cfg_dir}/id_rsa" \
+            ${disk}/ ${ssh_user}@${ssh_host}:${ssh_remote_dir}/$(basename ${disk}) \
+            >> ${log} 2>&1
+    done
+
+    # Sync contents of /jffs to ${ssh_host}
+    log=/opt/var/log/backup-jffs.log
+    log_msg "Backing up /jffs to ${ssh_host}"
+
+    /usr/bin/ssh -p ${ssh_port} -i ${ssh_cfg_dir}/id_rsa ${ssh_user}@${ssh_host} \
+        "mkdir -p ${ssh_remote_dir}/jffs"
+
+    /opt/bin/rsync -avz -e "/usr/bin/ssh -p ${ssh_port} -i ${ssh_cfg_dir}/id_rsa" \
+        /jffs/ ${ssh_user}@${ssh_host}:${ssh_remote_dir}/jffs >> ${log} 2>&1
+
+    return 0
+}
+
+main() {
+    find_mounts mounted_disks
+
+    if [[ ${#mounted_disks[@]} == 0 ]]; then
+        log_msg "${SCRIPT_NAME} did not find any mounted disks and exited"
+        exit 1
+    fi
+
+    enable_cron
+    backup_nvram
+    backup_disks
+
+    return 0
+}
+
+#-------------------------------------------------------------------------------
+# Main script
+#
+main "${@}"
+
+exit 0
