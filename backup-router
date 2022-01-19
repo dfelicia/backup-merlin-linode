@@ -5,7 +5,7 @@
 #       backup-router
 #
 #     DESCRIPTION
-#       This script is called by cron and
+#      This script is called by cron and
 #      will backup NVRAM, /jffs, and mounted USB devices
 #      to a remote server vis ssh
 #
