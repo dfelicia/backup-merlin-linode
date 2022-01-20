@@ -65,7 +65,7 @@ find_mounts() {
 enable_cron() {
     if [[ -z $(cru l | grep ${SCRIPT_NAME}) ]]; then
         # Add cron job every day at 3am
-        cru a ${SCRIPT_NAME} "* 3 * * * /jffs/scripts/backup-router"
+        cru a ${SCRIPT_NAME} "0 3 * * * /jffs/scripts/backup-router"
         log_msg "Added cron job"
     fi
 
