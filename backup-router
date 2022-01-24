@@ -1,11 +1,11 @@
-#!/usr/bin/env bash
+#!/opt/bin/bash
 
 #
-#     NAME
-#       backup-router
+#	 NAME
+#	   backup-router
 #
-#     DESCRIPTION
-#      This script is called by cron and
+#	 DESCRIPTION
+#	   This script is called by cron and
 #      will backup NVRAM, /jffs, and mounted USB devices
 #      to a remote server vis ssh
 #
@@ -64,8 +64,8 @@ find_mounts() {
 
 enable_cron() {
     if [[ -z $(cru l | grep ${SCRIPT_NAME}) ]]; then
-        # Add cron job every day at 3am
-        cru a ${SCRIPT_NAME} "0 3 * * * /jffs/scripts/backup-router"
+        # Add cron job every day at 11am
+        cru a ${SCRIPT_NAME} "0 11 * * * /jffs/scripts/backup-router"
         log_msg "Added cron job"
     fi
 
@@ -77,7 +77,7 @@ backup_nvram() {
     local disk
 
     for disk in "${mounted_disks[@]}"; do
-        nvram_save=$(find ${disk} -maxdepth 5 -type f -name nvram-save.sh)
+        nvram_save=$(/opt/bin/find ${disk} -maxdepth 5 -type f -name nvram-save.sh)
         [[ -z ${nvram_save} ]] || break
     done
 
@@ -135,6 +135,7 @@ main() {
         exit 1
     fi
 
+    umask 0077
     enable_cron
     backup_nvram
     backup_disks
